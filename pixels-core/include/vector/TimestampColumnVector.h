@@ -19,6 +19,11 @@ public:
     explicit TimestampColumnVector(int precision, bool encoding = false);
     explicit TimestampColumnVector(uint64_t len, int precision, bool encoding = false);
     void * current() override;
+    void add(std::string &value) override;
+    void add(bool value) override;
+    void add(int64_t value) override;
+    void add(int value) override;
+    void ensureSize(uint64_t size, bool preserveData) override;
     void set(int elementNum, long ts);
     ~TimestampColumnVector();
     void print(int rowCount) override;

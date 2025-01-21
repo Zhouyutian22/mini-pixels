@@ -3,20 +3,16 @@
 //
 
 #include "vector/DateColumnVector.h"
-
+#include <algorithm>
+#include <ctime>
 DateColumnVector::DateColumnVector(uint64_t len, bool encoding): ColumnVector(len, encoding) {
-	if(encoding) {
-        posix_memalign(reinterpret_cast<void **>(&dates), 32,
-                       len * sizeof(int32_t));
-	} else {
-		this->dates = nullptr;
-	}
+	posix_memalign(reinterpret_cast<void **>(&dates), 32,len * sizeof(int32_t));
 	memoryUsage += (long) sizeof(int) * len;
 }
 
 void DateColumnVector::close() {
 	if(!closed) {
-		if(encoding && dates != nullptr) {
+		if(/*encoding && */dates != nullptr) {
 			free(dates);
 		}
 		dates = nullptr;
@@ -56,5 +52,50 @@ void * DateColumnVector::current() {
         return nullptr;
     } else {
         return dates + readIndex;
+    }
+}
+
+void DateColumnVector::add(std::string &value) {
+    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+
+	struct std::tm tm = {};  
+	if (strptime(value.c_str(), "%Y-%m-%d", &tm)) {
+		std::time_t time = std::mktime(&tm) +8*3600; //东八区
+		long days = time / (24 * 60 * 60) ;
+		add(days);
+	} else {
+		std::cerr << "Failed to parse date string: " << value << std::endl;
+	}
+}
+
+void DateColumnVector::add(bool value) {
+	add(value ? 1 : 0);
+}
+
+void DateColumnVector::add(int64_t value) {
+    add(static_cast<int>(value));  
+}
+
+void DateColumnVector::add(int value) {
+    if (writeIndex >= length) {
+        ensureSize(writeIndex * 2, true);  
+    }
+    int index = writeIndex++;
+    dates[index] = value;
+    isNull[index] = false;
+}
+
+void DateColumnVector::ensureSize(uint64_t size, bool preserveData) {
+    ColumnVector::ensureSize(size, preserveData);
+    if (length < size) {
+            int *oldVector = dates;
+            posix_memalign(reinterpret_cast<void **>(&dates), 32,
+                           size * sizeof(int32_t));
+            if (preserveData) {
+                std::copy(oldVector, oldVector + length, dates);
+            }
+            delete[] oldVector;
+            memoryUsage += (long) sizeof(int) * (size - length);
+            resize(size);
     }
 }

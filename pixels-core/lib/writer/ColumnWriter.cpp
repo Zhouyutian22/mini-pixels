@@ -48,7 +48,7 @@ std::shared_ptr<pixels::proto::ColumnChunkIndex> ColumnWriter::getColumnChunkInd
     return columnChunkIndex;
 }
 
-pixels::proto::ColumnEncoding ColumnWriter::getColumnChunkEncoding() const {
+pixels::proto::ColumnEncoding ColumnWriter::getColumnChunkEncoding() {
     pixels::proto::ColumnEncoding encoding;
     encoding.set_kind(pixels::proto::ColumnEncoding::Kind::ColumnEncoding_Kind_NONE);
     return encoding;
@@ -127,5 +127,3 @@ ColumnWriter::ColumnWriter(std::shared_ptr<TypeDescription> type,
     columnChunkIndex->set_nullspadding(nullsPadding);
     columnChunkIndex->set_isnullalignment(ISNULL_ALIGNMENT);
 }
-
-

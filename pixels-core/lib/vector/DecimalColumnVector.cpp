@@ -4,7 +4,8 @@
 
 #include "vector/DecimalColumnVector.h"
 #include "duckdb/common/types/decimal.hpp"
-
+#include <algorithm>
+#include <cmath>
 /**
  * The decimal column vector with precision and scale.
  * The values of this column vector are the unscaled integer value
@@ -44,9 +45,13 @@ DecimalColumnVector::DecimalColumnVector(uint64_t len, int precision, int scale,
                        len * sizeof(int32_t));
         memoryUsage += (uint64_t)sizeof(int32_t) * len;
     } else if (precision <= Decimal::MAX_WIDTH_INT64) {
+        posix_memalign(reinterpret_cast<void **>(&vector), 32,
+                       len * sizeof(uint64_t));
         physical_type_ = PhysicalType::INT64;
         memoryUsage += (uint64_t)sizeof(uint64_t) * len;
     } else if (precision <= Decimal::MAX_WIDTH_INT128) {
+        posix_memalign(reinterpret_cast<void **>(&vector), 32,
+                       len * sizeof(uint64_t));
         physical_type_ = PhysicalType::INT128;
         memoryUsage += (uint64_t)sizeof(uint64_t) * len;
     } else {
@@ -93,5 +98,52 @@ int DecimalColumnVector::getPrecision() {
 
 
 int DecimalColumnVector::getScale() {
-	return scale;
+    return scale;
+}
+
+void DecimalColumnVector::add(std::string &value) {
+    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+
+    int pos = value.find('.');
+    if (pos == std::string::npos) {
+        long lv = std::stol(value);  
+        int64_t v = lv * std::pow(10, scale);
+        add(v); 
+    } else {
+        int64_t lv = std::stol(value.substr(0, pos) + value.substr(pos + 1));
+        int64_t v = lv * std::pow(10,scale -(value.length()- pos - 1));
+        add(v);
+    }
+}
+
+void DecimalColumnVector::add(bool value) {
+    add(static_cast<int64_t>(value));  
+}
+
+void DecimalColumnVector::add(int64_t value) {
+    if (writeIndex >= length) {
+        ensureSize(writeIndex * 2, true);  
+    }
+    int index = writeIndex++;
+    vector[index] = value;
+    isNull[index] = false;    
+}
+
+void DecimalColumnVector::add(int value) {
+    add(static_cast<int64_t>(value));  
+}
+
+void DecimalColumnVector::ensureSize(uint64_t size, bool preserveData) {
+    ColumnVector::ensureSize(size, preserveData);
+    if (length < size) {
+        long *oldVector = vector;
+        posix_memalign(reinterpret_cast<void **>(&vector), 32,
+                        size * sizeof(int64_t));
+        if (preserveData) {
+            std::copy(oldVector, oldVector + length, vector);
+        }
+        delete[] oldVector;
+        memoryUsage += (long) sizeof(long) * (size - length);
+        resize(size);
+    }
 }
